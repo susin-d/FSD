@@ -1,23 +1,31 @@
-
 const mongoose = require("mongoose");
 const dns = require("node:dns");
+const net = require("node:net");
 
-// Configure DNS servers for MongoDB Atlas SRV resolution
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+function configureDnsResolvers() {
+  const configured = process.env.MONGODB_DNS_SERVERS;
+  if (!configured) return;
 
-const connectdb = async (db_url) => {
-    try {
-        await mongoose.connect(db_url, {
-            serverSelectionTimeoutMS: 10000,
-            connectTimeoutMS: 10000,
-        });
+  const servers = configured.split(",").map((server) => server.trim());
+  if (!servers.length || servers.some((server) => !net.isIP(server))) {
+    throw new Error("MONGODB_DNS_SERVERS must contain comma-separated IP addresses.");
+  }
 
-        console.log("MongoDB Connected Successfully");
-        console.log("Database:", mongoose.connection.name);
-    } catch (error) {
-        console.error("MongoDB Connection Failed:", error.message);
-        process.exit(1);
-    }
-};
+  dns.setServers(servers);
+}
+
+async function connectdb(dbUrl) {
+  if (!dbUrl) {
+    throw new Error("MONGO_URI is required to start the API.");
+  }
+
+  configureDnsResolvers();
+  await mongoose.connect(dbUrl, {
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
+  });
+
+  return mongoose.connection;
+}
 
 module.exports = connectdb;

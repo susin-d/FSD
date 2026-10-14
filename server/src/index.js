@@ -1,51 +1,66 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const connectdb = require("./config/db");
+require("dotenv").config();
+
+const http = require("node:http");
 const mongoose = require("mongoose");
+const { Server } = require("socket.io");
+const connectdb = require("./config/db");
+const { app, allowedOrigins } = require("./app");
+const { attachMessageSocket } = require("./modules/messaging/socket");
+const { startLifecycleWorker } = require("./utils/lifecycle");
 
-dotenv.config();
+const port = Number(process.env.PORT || 4000);
 
-const port = process.env.PORT || 3000;
-const db_url = process.env.MONGODB_URI;
-
-const app = express();
-
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.status(200).json({
-    name: "Nearby API",
-    message: "Welcome to Nearby API",
-    version: "1.0.0",
-    status: "running",
-  });
-});
-
-app.get("/health", async (req, res) => {
-  const dbConnected = mongoose.connection.readyState === 1;
-  let dbPing = false;
-
-  if (dbConnected) {
-    try {
-      await mongoose.connection.db.admin().ping();
-      dbPing = true;
-    } catch (err) {
-      dbPing = false;
-    }
+async function startServer() {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("PORT must be an integer between 1 and 65535.");
   }
 
-  const healthy = dbConnected && dbPing;
+  // MONGO_URI is canonical; keep the old key as a local migration fallback.
+  await connectdb(process.env.MONGO_URI || process.env.MONGODB_URI);
 
-  res.status(healthy ? 200 : 503).json({
-    status: healthy ? "healthy" : "unhealthy",
-    database: healthy ? "connected" : "disconnected",
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin: allowedOrigins(),
+      methods: ["GET", "POST"],
+      allowedHeaders: ["Authorization"],
+    },
   });
-});
+  attachMessageSocket(io);
+  const lifecycleTimer = await startLifecycleWorker();
 
-connectdb(db_url);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, () => {
+      server.removeListener("error", reject);
+      console.log(`Nearby API listening on port ${port}`);
+      resolve();
+    });
+  });
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-});
+  let closing = false;
+  async function shutdown(signal) {
+    if (closing) return;
+    closing = true;
+    console.log(`${signal} received; shutting down Nearby API.`);
+    clearInterval(lifecycleTimer);
+    const hardExit = setTimeout(() => process.exit(1), 10000).unref();
+    io.close(async () => {
+      clearTimeout(hardExit);
+      await mongoose.disconnect();
+      process.exit(0);
+    });
+  }
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  return { server, io };
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error("Nearby API failed to start:", error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { startServer };
