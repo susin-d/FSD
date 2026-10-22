@@ -217,14 +217,21 @@ router.post(
     const settings = await MarketplaceSettings.findOne({ key: "marketplace" }).lean();
     ensure(Number.isInteger(settings?.completionReviewHours), 503, "Completion review period is not configured", "MARKETPLACE_NOT_CONFIGURED");
     const now = new Date();
-    booking.status = "completion_pending";
-    booking.completionMarkedAt = now;
-    booking.completionMarkedBy = req.user.id;
-    booking.reviewDeadlineAt = new Date(now.getTime() + settings.completionReviewHours * 3_600_000);
-    await booking.save();
+    const reviewDeadlineAt = new Date(now.getTime() + settings.completionReviewHours * 3_600_000);
+    const completionPendingBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "confirmed" },
+      { $set: {
+        status: "completion_pending",
+        completionMarkedAt: now,
+        completionMarkedBy: req.user.id,
+        reviewDeadlineAt,
+      } },
+      { new: true },
+    );
+    ensure(completionPendingBooking, 409, "Only a confirmed booking can be marked complete", "BOOKING_STATE_CONFLICT");
     await setReservationState(booking._id, "confirmed", null);
-    await recordAudit({ actorId: req.user.id, action: "booking.completion_marked", resourceType: "booking", resourceId: booking._id, metadata: { reviewDeadlineAt: booking.reviewDeadlineAt }, req });
-    res.json({ success: true, data: { booking: await populateBooking(Booking.findById(booking._id)), reviewDeadlineAt: booking.reviewDeadlineAt } });
+    await recordAudit({ actorId: req.user.id, action: "booking.completion_marked", resourceType: "booking", resourceId: booking._id, metadata: { reviewDeadlineAt }, req });
+    res.json({ success: true, data: { booking: await populateBooking(Booking.findById(booking._id)), reviewDeadlineAt } });
   })
 );
 

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, BadgeCheck, BookOpen, Brush, CheckCircle2, ChevronRight, Clock3, Hammer, MapPin, Search, ShieldCheck, Sparkles, Wrench, Zap } from 'lucide-react'
+import { ArrowRight, BookOpen, Brush, CheckCircle2, ChevronRight, Hammer, MapPin, Search, ShieldCheck, Sparkles, Wrench, Zap } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ErrorState, Footer, LoadingState, ServiceCard, SiteHeader } from '../components/AppChrome.jsx'
 import { api, asList, errorMessage } from '../services/api.js'
+import heroImage from '../assets/nearby-landing-hero.webp'
 
 const categories = [
   { name: 'Home repairs', icon: Hammer, tint: 'peach' },
@@ -61,41 +62,51 @@ export function Home() {
     return () => { active = false }
   }, [attempt])
 
-  return <div className="public-page">
+  return <div className="public-page home-page">
     <SiteHeader />
-    <main>
-      <section className="hero-section">
-        <div className="hero-copy">
-          <span className="eyebrow"><span className="eyebrow-dot" /> GOOD PEOPLE, JUST AROUND THE CORNER</span>
-          <h1>It takes a <em>neighbor</em><br />to make a home.</h1>
-          <p>From the quick fix to the big to-do, find a skilled local pro who makes getting it done feel easy.</p>
+    <main className="home-main">
+      <section className="home-hero" aria-labelledby="home-hero-title">
+        <div className="home-hero-copy">
+          <p className="home-kicker"><span className="home-kicker-dot" aria-hidden="true" /> LOCAL SERVICES, JUST AROUND THE CORNER</p>
+          <h1 id="home-hero-title">Good help for home.<br /><em>Right around here.</em></h1>
+          <p className="home-hero-lede">Find local services for the fixes, refreshes, and everyday jobs on your list.</p>
           <SearchBox />
-          <div className="hero-assurance"><span><ShieldCheck size={16} /> Profiles reviewed by Nearby</span><span><CheckCircle2 size={16} /> Book with clarity</span></div>
+          <div className="home-hero-points"><span><MapPin size={15} /> Search by 6-digit PIN</span><span><CheckCircle2 size={15} /> Review details before booking</span></div>
         </div>
-        <div className="hero-art" aria-label="Nearby local services illustration">
-          <div className="hero-art-paper"><div className="sun-shape" /><div className="house-roof" /><div className="house-body"><div className="house-window" /><div className="house-door" /></div><div className="plant plant-left"><i /><i /><i /><b /></div><div className="plant plant-right"><i /><i /><i /><b /></div></div>
-          <div className="floating-note note-top"><span className="note-icon note-yellow"><Clock3 size={17} /></span><span><b>Help that fits your day</b><small>Local, flexible, reliable</small></span></div>
-          <div className="floating-note note-bottom"><span className="note-icon note-blue"><BadgeCheck size={18} /></span><span><b>Good hands, nearby</b><small>Reviewed provider profiles</small></span></div>
-          <span className="hero-asterisk" aria-hidden="true">✳</span><span className="hero-stamp">YOUR<br />NEIGHBORHOOD<br />HELP DESK</span>
+        <figure className="home-hero-visual">
+          <span className="home-hero-backdrop" aria-hidden="true" />
+          <div className="home-hero-image-wrap">
+            <img src={heroImage} alt="A cobalt toolbox and home repair tools arranged beneath a yellow arch." />
+            <span className="home-hero-image-label">GOOD WORK · CLOSE TO HOME</span>
+          </div>
+          <figcaption><span>TOOLS FOR THE EVERYDAY</span><span>01 / NEARBY</span></figcaption>
+        </figure>
+      </section>
+
+      <section className="home-discovery section-wrap" aria-labelledby="home-discovery-title">
+        <div className="home-section-heading">
+          <div><p className="home-section-index"><span>01</span> BROWSE BY SERVICE</p><h2 id="home-discovery-title">What needs doing?</h2></div>
+          <div className="home-section-aside"><p>Pick a skill, then use your PIN code to see service listings in your area.</p><Link className="home-text-link" to="/services">Explore all services <ArrowRight size={16} /></Link></div>
         </div>
-        <div className="hero-index"><span>01</span><i /> <span>04</span></div>
+        <div className="home-category-grid">{categories.map(({ name, icon: Icon, tint }) => <Link key={name} className={`home-category-card home-category-card--${tint}`} to={`/services?category=${encodeURIComponent(name)}`}><span className="home-category-card-top"><span className={`home-category-icon ${tint}`}><Icon size={22} /></span><ChevronRight size={18} /></span><strong>{name}</strong><span className="home-category-hint">Explore local listings</span></Link>)}</div>
       </section>
 
-      <section className="category-section section-wrap">
-        <div className="section-heading"><div><span className="eyebrow">A GOOD PLACE TO START</span><h2>What can we help with?</h2></div><Link to="/services" className="text-link">Explore all services <ArrowRight size={16} /></Link></div>
-        <div className="category-grid">{categories.map(({ name, icon: Icon, tint }) => <Link key={name} className="category-tile" to={`/services?category=${encodeURIComponent(name)}`}><span className={`category-icon ${tint}`}><Icon size={22} /></span><span>{name}</span><ChevronRight size={15} className="category-chevron" /></Link>)}</div>
+      <section className="home-featured section-wrap" aria-labelledby="home-featured-title">
+        <div className="home-section-heading home-featured-heading">
+          <div><p className="home-section-index"><span>02</span> GOOD WORK CLOSE TO HOME</p><h2 id="home-featured-title">Services around you.</h2><p className="home-section-description">Explore offerings from local professionals on Nearby.</p></div>
+          <Link className="home-text-link" to="/services">View the directory <ArrowRight size={16} /></Link>
+        </div>
+        {loading ? <div className="home-featured-state"><LoadingState label="Finding local services…" /></div> : error ? <div className="home-featured-state"><ErrorState message={error} onRetry={() => { setLoading(true); setAttempt((n) => n + 1) }} /></div> : services.length ? <div className="service-grid home-service-grid">{services.map((service) => <ServiceCard key={service._id || service.id} service={service} />)}</div> : <div className="home-empty-state"><span className="home-empty-mark" aria-hidden="true">✳</span><div><h3>No services are listed yet.</h3><p>Explore the directory or check back soon.</p></div><Link className="home-text-link" to="/services">Explore services <ArrowRight size={15} /></Link></div>}
       </section>
 
-      <section className="featured-section section-wrap">
-        <div className="section-heading"><div><span className="eyebrow">GOOD WORK CLOSE TO HOME</span><h2>Services around you</h2><p>Explore offerings from local professionals on Nearby.</p></div><Link to="/services" className="text-link">See all <ArrowRight size={16} /></Link></div>
-        {loading ? <LoadingState label="Finding local services…" /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); setAttempt((n) => n + 1) }} /> : services.length ? <div className="service-grid">{services.map((service) => <ServiceCard key={service._id || service.id} service={service} />)}</div> : <div className="inline-empty"><span className="inline-empty-star">✳</span><span>New services are on their way. Search your PIN code or check back soon.</span><Link to="/services">Explore Nearby <ArrowRight size={15} /></Link></div>}
+      <section className="home-how" aria-labelledby="home-how-title">
+        <div className="section-wrap home-how-layout">
+          <div className="home-how-intro"><p className="home-section-index"><span>03</span> HOW NEARBY WORKS</p><h2 id="home-how-title">Three steps.<br /><em>One thing off your list.</em></h2><p>Search, compare service details, and send a booking request that works for you.</p><Link to="/services" className="button button-primary">Browse services <ArrowRight size={16} /></Link></div>
+          <div className="home-how-steps"><article><span className="home-step-number">01</span><div><h3>Tell us what you need</h3><p>Search by service and your 6-digit PIN code to see what is listed nearby.</p></div></article><article><span className="home-step-number">02</span><div><h3>Choose a local pro</h3><p>Compare service details and request a time that works for you.</p></div></article><article><span className="home-step-number">03</span><div><h3>Get it done, together</h3><p>Stay in touch through your booking and share a review when the job is complete.</p></div></article></div>
+        </div>
       </section>
 
-      <section className="how-section">
-        <div className="section-wrap how-layout"><div className="how-intro"><span className="eyebrow">NEARBY MAKES IT SIMPLE</span><h2>Small tasks.<br /><em>Good neighbors.</em></h2><p>Get the details you need, choose a time, and let a nearby pro take it from there.</p><Link to="/services" className="button button-dark">Browse services <ArrowRight size={16} /></Link></div><div className="how-steps"><article><span className="step-no">01</span><div><h3>Tell us what you need</h3><p>Search by service and your 6-digit PIN code to see what's available nearby.</p></div></article><article><span className="step-no">02</span><div><h3>Choose a local pro</h3><p>Compare clear service details and send a booking request that works for you.</p></div></article><article><span className="step-no">03</span><div><h3>Get it done, together</h3><p>Stay in touch through your booking and share a review when the job is complete.</p></div></article></div></div>
-      </section>
-
-      <section className="join-banner section-wrap"><div><span className="eyebrow">SKILLED AT WHAT YOU DO?</span><h2>Bring your work <em>closer.</em></h2><p>Meet customers in your area and grow your independent service business.</p></div><Link to="/signup" className="button button-primary">Offer your services <ArrowRight size={17} /></Link><span className="join-sparkle" aria-hidden="true">✳</span></section>
+      <section className="home-provider-cta section-wrap" aria-labelledby="home-provider-title"><div><p className="home-section-index"><span>04</span> FOR LOCAL PROFESSIONALS</p><h2 id="home-provider-title">Bring your skills<br /><em>closer to home.</em></h2><p>List your services and meet customers in your area.</p></div><Link to="/signup" className="button button-primary">Offer your services <ArrowRight size={17} /></Link><span className="home-provider-spark" aria-hidden="true">✳</span></section>
     </main>
     <Footer />
   </div>

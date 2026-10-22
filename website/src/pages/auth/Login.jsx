@@ -31,7 +31,7 @@ export default function Login() {
       {error && <div className="notice notice-error" role="alert">{error}</div>}
       <label className="field"><span>Email address</span><input type="email" autoComplete="email" required placeholder="you@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label className="field"><span>Password</span><input type="password" autoComplete="current-password" required placeholder="Enter your password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
-      <div className="form-inline-end"><span>Use the email linked to your account</span></div>
+      <div className="form-inline-end"><span>Use the email linked to your account</span><Link to="/forgot-password" className="password-recovery-link">Forgot password?</Link></div>
       <AuthSubmit loading={loading}>Sign in</AuthSubmit>
     </form>
   </AuthLayout>

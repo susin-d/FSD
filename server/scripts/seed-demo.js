@@ -17,8 +17,56 @@ const accounts = [
   { name: "Demo Admin", email: "demo.admin@example.test", role: "admin" },
 ];
 
+const serviceDefinitions = [
+  {
+    title: "Demo deep home cleaning",
+    description: "A demo-only two-hour home cleaning service for discovery, booking, and review flows.",
+    category: "Cleaning",
+    pricePaise: 149900,
+    durationMinutes: 120,
+  },
+  {
+    title: "Demo plumbing repair visit",
+    description: "A demo-only plumbing visit for common tap, pipe, and drainage repairs.",
+    category: "Plumbing",
+    pricePaise: 89900,
+    durationMinutes: 90,
+  },
+  {
+    title: "Demo electrical safety check",
+    description: "A demo-only inspection of common switches, wiring, and electrical fixtures.",
+    category: "Electrical",
+    pricePaise: 119900,
+    durationMinutes: 90,
+  },
+];
+
 function indiaTime(date, time) {
   return new Date(`${date}T${time}:00+05:30`);
+}
+
+function dateKeyInIndia(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function shiftDateKey(dateKey, offsetDays) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
+function indiaDate(offsetDays, time, today = dateKeyInIndia()) {
+  const date = shiftDateKey(today, offsetDays);
+  return { date, at: indiaTime(date, time) };
 }
 
 async function seedDemo() {
@@ -60,29 +108,30 @@ async function seedDemo() {
     user: providerUser._id,
     businessName: "DEMO ONLY Home Care",
     bio: "Seeded marketplace profile for testing Nearby. No KYC documents are stored.",
-    categories: ["Cleaning"],
-    servicePincodes: ["560001"],
+    categories: ["Cleaning", "Plumbing", "Electrical"],
+    servicePincodes: ["560001", "560002"],
     verificationStatus: "verified",
     kycProvider: "demo_seed",
     kycReference: "demo-seed-no-documents",
   });
-  const service = await Service.create({
+  const services = await Service.insertMany(serviceDefinitions.map((definition) => ({
+    ...definition,
     provider: provider._id,
-    title: "Demo deep home cleaning",
-    description: "A demo-only two-hour home cleaning service for discovery, booking, and review flows.",
-    category: "Cleaning",
-    pricePaise: 149900,
-    durationMinutes: 120,
-    servicePincodes: ["560001"],
+    servicePincodes: ["560001", "560002"],
     isActive: true,
+  })));
+  const service = services[0];
+  const today = dateKeyInIndia();
+  const availabilitySlots = Array.from({ length: 14 }, (_, index) => index + 1).flatMap((offsetDays) => {
+    const date = shiftDateKey(today, offsetDays);
+    return [
+      { date, startTime: "10:00", endTime: "12:00", startsAt: indiaTime(date, "10:00"), endsAt: indiaTime(date, "12:00") },
+      { date, startTime: "14:00", endTime: "17:00", startsAt: indiaTime(date, "14:00"), endsAt: indiaTime(date, "17:00") },
+    ];
   });
   await Availability.create({
     provider: provider._id,
-    slots: [
-      { date: "2026-10-15", startTime: "14:00", endTime: "17:00", startsAt: indiaTime("2026-10-15", "14:00"), endsAt: indiaTime("2026-10-15", "17:00") },
-      { date: "2026-10-16", startTime: "10:00", endTime: "12:00", startsAt: indiaTime("2026-10-16", "10:00"), endsAt: indiaTime("2026-10-16", "12:00") },
-      { date: "2026-10-16", startTime: "14:00", endTime: "17:00", startsAt: indiaTime("2026-10-16", "14:00"), endsAt: indiaTime("2026-10-16", "17:00") },
-    ],
+    slots: availabilitySlots,
   });
   await MarketplaceSettings.updateOne(
     { key: "marketplace" },
@@ -103,11 +152,14 @@ async function seedDemo() {
     { upsert: true },
   );
 
+  const requestedTime = indiaDate(2, "10:00", today);
+  const completedTime = indiaDate(-2, "10:00", today);
+  const disputedTime = indiaDate(-1, "14:00", today);
   const requested = await Booking.create({
     customer: customer._id,
     provider: provider._id,
     service: service._id,
-    scheduledAt: indiaTime("2026-10-16", "10:00"),
+    scheduledAt: requestedTime.at,
     servicePincode: "560001",
     serviceAddress: "Demo address, Bengaluru",
     notes: "Demo-only request for testing provider acceptance and checkout.",
@@ -119,20 +171,20 @@ async function seedDemo() {
     customer: customer._id,
     provider: provider._id,
     service: service._id,
-    scheduledAt: indiaTime("2026-10-12", "10:00"),
+    scheduledAt: completedTime.at,
     servicePincode: "560001",
     serviceAddress: "Demo address, Bengaluru",
     notes: "Demo-only completed booking for testing reviews.",
     status: "completed",
     pricePaise: service.pricePaise,
     durationMinutes: service.durationMinutes,
-    completedAt: indiaTime("2026-10-12", "12:00"),
+    completedAt: indiaTime(completedTime.date, "12:00"),
   });
   const disputed = await Booking.create({
     customer: customer._id,
     provider: provider._id,
     service: service._id,
-    scheduledAt: indiaTime("2026-10-15", "14:00"),
+    scheduledAt: disputedTime.at,
     servicePincode: "560001",
     serviceAddress: "Demo address, Bengaluru",
     notes: "Demo-only booking for testing the admin dispute queue.",
@@ -142,11 +194,11 @@ async function seedDemo() {
   });
   await AvailabilityDay.create({
     provider: provider._id,
-    dateKey: "2026-10-15",
+    dateKey: disputedTime.date,
     reservations: [{
       booking: disputed._id,
       startsAt: disputed.scheduledAt,
-      endsAt: indiaTime("2026-10-15", "16:00"),
+      endsAt: indiaTime(disputedTime.date, "16:00"),
       state: "confirmed",
       expiresAt: null,
     }],
@@ -163,14 +215,19 @@ async function seedDemo() {
     accounts,
     providerProfileId: String(provider._id),
     serviceId: String(service._id),
+    serviceIds: services.map((item) => String(item._id)),
     bookingIds: { requested: String(requested._id), completed: String(completed._id), disputed: String(disputed._id) },
   };
 }
 
-seedDemo()
-  .then((result) => console.log(JSON.stringify({ seeded: true, ...result })))
-  .catch((error) => {
-    console.error(`Demo seed failed: ${error.message}`);
-    process.exitCode = 1;
-  })
-  .finally(async () => { await mongoose.disconnect().catch(() => {}); });
+if (require.main === module) {
+  seedDemo()
+    .then((result) => console.log(JSON.stringify({ seeded: true, ...result })))
+    .catch((error) => {
+      console.error(`Demo seed failed: ${error.message}`);
+      process.exitCode = 1;
+    })
+    .finally(async () => { await mongoose.disconnect().catch(() => {}); });
+}
+
+module.exports = { dateKeyInIndia, shiftDateKey, indiaDate, serviceDefinitions, seedDemo };

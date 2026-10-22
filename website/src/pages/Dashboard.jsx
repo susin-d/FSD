@@ -12,6 +12,7 @@ const NAV_ITEMS = {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'bookings', label: 'My bookings', icon: ClipboardList },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'account', label: 'Account settings', icon: UserRound },
   ],
   provider: [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -20,12 +21,14 @@ const NAV_ITEMS = {
     { id: 'availability', label: 'Availability', icon: CalendarDays },
     { id: 'profile', label: 'My profile', icon: UserRound },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'account', label: 'Account settings', icon: Settings2 },
   ],
   admin: [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'providers', label: 'Providers', icon: Users },
     { id: 'disputes', label: 'Disputes', icon: LifeBuoy },
     { id: 'audit', label: 'Activity log', icon: Activity },
+    { id: 'account', label: 'Account settings', icon: UserRound },
     { id: 'settings', label: 'Marketplace settings', icon: Settings2 },
   ],
 }
@@ -551,6 +554,51 @@ function AdminSettings() {
   return <><PageTitle eyebrow="MARKETPLACE RULES" title="Settings and safeguards." description="Set commission, payment timing, and nested cancellation/refund rules before launch." />{notice && <div className="notice notice-success"><CheckCircle2 size={16} /> {notice}</div>}{loading ? <LoadingState label="Loading marketplace settings…" /> : error ? <ErrorState message={error} onRetry={() => setAttempt((value) => value + 1)} /> : editable.length ? <form className="dash-panel settings-form" onSubmit={save}><div className="settings-info"><ShieldCheck size={19} /><p>Only supported settings are sent. Blank optional numeric values remain unset. Route credentials and private secrets are never shown here.</p></div><div className="settings-grid">{editable.map(([key, value]) => { const numeric = typeof value === 'number' || value === null; return <label className="field" key={key}><span>{labelFor(key)}</span>{key === 'razorpayRouteEnabled' ? <select name={key} defaultValue={String(value)}><option value="true">Enabled</option><option value="false">Disabled</option></select> : <input name={key} type={numeric ? 'number' : 'text'} min={numeric ? minFor(key) : undefined} max={maxFor(key)} step={numeric ? 1 : undefined} defaultValue={value ?? ''} />}{helpFor(key) && <small className="field-help">{helpFor(key)}</small>}</label> })}</div><button className="button button-primary" disabled={busy}>{busy ? <span className="spinner" /> : <>Save settings <ArrowRight size={16} /></>}</button></form> : <div className="notice notice-warning"><CircleAlert size={17} /><span>Marketplace settings are not configured yet. Set commission, cancellation and refund rules, checkout timeout, and completion review window on the server before launch.</span></div>}</>
 }
 
+function AccountSettings() {
+  const { setUser } = useSession()
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    api.get('/users/me')
+      .then((data) => { if (active) { setProfile(data?.user || data); setError('') } })
+      .catch((requestError) => { if (active) setError(errorMessage(requestError)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [attempt])
+
+  async function save(event) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const payload = {
+      name: String(formData.get('name') || '').trim(),
+      phone: String(formData.get('phone') || '').trim(),
+      countryCode: String(formData.get('countryCode') || '').trim(),
+    }
+    setBusy(true); setNotice(''); setError('')
+    try {
+      const data = await api.patch('/users/me', payload)
+      const updated = data?.user || data?.profile || data
+      setProfile(updated)
+      setUser((current) => ({ ...current, ...updated }))
+      setNotice('Your profile settings have been saved.')
+    } catch (requestError) { setError(errorMessage(requestError)) }
+    finally { setBusy(false) }
+  }
+
+  const roleLabel = { customer: 'Customer', provider: 'Service professional', admin: 'Administrator' }
+  if (loading) return <LoadingState label="Loading your account settings…" />
+  if (!profile) return <><PageTitle eyebrow="YOUR ACCOUNT" title="Profile settings." description="Keep your account details up to date." /><ErrorState message={error || 'Your profile could not be loaded.'} onRetry={() => setAttempt((value) => value + 1)} /></>
+
+  return <><PageTitle eyebrow="YOUR ACCOUNT" title="Profile settings." description="Manage the details attached to your Nearby account." />{notice && <div className="notice notice-success" role="status"><CheckCircle2 size={16} /> {notice}</div>}{error && <div className="notice notice-error" role="alert">{error}</div>}<form className="dash-panel settings-form account-settings" onSubmit={save}><div className="settings-info"><ShieldCheck size={19} /><p>Your email and account role are read-only in profile settings. Email changes aren't available here.</p></div><div className="settings-grid"><label className="field"><span>Full name</span><input name="name" required minLength={1} maxLength={100} value={profile.name || ''} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} autoComplete="name" /></label><label className="field"><span>Email address</span><input type="email" value={profile.email || ''} readOnly aria-describedby="account-email-help" /><small className="field-help" id="account-email-help">This address is used to sign in.</small></label><label className="field"><span>Phone number <small>(optional)</small></span><span className="phone-field"><input className="country-code-input" name="countryCode" aria-label="Country calling code" value={profile.countryCode || '+91'} onChange={(event) => setProfile((current) => ({ ...current, countryCode: event.target.value.replace(/[^+\d]/g, '').slice(0, 4) }))} pattern="\+\d{1,3}" title="Use a country code such as +91." autoComplete="tel-country-code" /><input name="phone" type="tel" inputMode="numeric" maxLength={15} pattern="[0-9]{7,15}" value={profile.phone || ''} onChange={(event) => setProfile((current) => ({ ...current, phone: event.target.value.replace(/\D/g, '').slice(0, 15) }))} autoComplete="tel-national" placeholder="Phone number" /></span><small className="field-help">Leave blank to remove your phone number from your account.</small></label><div className="field"><span>Account type</span><input value={roleLabel[profile.role] || 'Nearby account'} readOnly /></div></div><button className="button button-primary" disabled={busy}>{busy ? <span className="spinner" /> : <>Save profile settings <ArrowRight size={16} /></>}</button></form></>
+}
+
 export default function Dashboard() {
   const { user } = useSession()
   const role = getRole(user)
@@ -683,11 +731,12 @@ export default function Dashboard() {
       <main className="dashboard-main"><div className="dashboard-content">{notice && <div className={`notice notice-${noticeTone} dismissible`} role="status"><CheckCircle2 size={17} /> {notice}<button aria-label="Dismiss" onClick={() => setNotice('')}><X size={16} /></button></div>}
         {role === 'admin' ? <>
           {view === 'overview' && (statsError ? <ErrorState message={statsError} onRetry={() => setAttempt((value) => value + 1)} /> : <Overview role={role} user={user} bookings={[]} stats={stats} setView={setView} />)}
-          {view === 'providers' && <AdminProviders />}{view === 'disputes' && <AdminDisputes />}{view === 'audit' && <AdminAudit />}{view === 'settings' && <AdminSettings />}
+          {view === 'providers' && <AdminProviders />}{view === 'disputes' && <AdminDisputes />}{view === 'audit' && <AdminAudit />}{view === 'account' && <AccountSettings />}{view === 'settings' && <AdminSettings />}
         </> : <>
           {view === 'overview' && <Overview role={role} user={user} bookings={bookings} stats={stats} setView={setView} />}
           {view === 'bookings' && <><PageTitle eyebrow={role === 'provider' ? 'CUSTOMER REQUESTS' : 'YOUR BOOKINGS'} title={role === 'provider' ? 'Booking requests.' : 'The things on your list.'} description={role === 'provider' ? 'Accept a request to open the booking conversation and payment flow.' : 'Follow each request from provider response through completion.'} action={<button className="button button-small button-outline" onClick={() => setAttempt((value) => value + 1)}><Activity size={15} /> Refresh</button>} />{bookingsLoading ? <LoadingState label="Loading bookings…" /> : bookingsError ? <ErrorState message={bookingsError} onRetry={() => setAttempt((value) => value + 1)} /> : <BookingList bookings={bookings} role={role} onAction={action} busyId={busyId} onReview={submitReview} onDispute={submitDispute} onMessages={(bookingId) => { setView('messages'); setParams({ view: 'messages', bookingId }) }} />}</>}
           {view === 'messages' && (bookingsLoading ? <LoadingState label="Loading bookings…" /> : bookingsError ? <ErrorState message={bookingsError} onRetry={() => setAttempt((value) => value + 1)} /> : <ChatPanel bookings={bookings} initialBookingId={params.get('bookingId') || ''} />)}
+          {view === 'account' && <AccountSettings />}
           {role === 'provider' && ['profile', 'services', 'availability'].includes(view) && <ProviderWorkspace key={view} view={view} />}
         </>}
       </div><footer className="dashboard-footer"><span>NEARBY · INDIA</span><span>Clear local connections, one booking at a time.</span></footer></main></div></div>

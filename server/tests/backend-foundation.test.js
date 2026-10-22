@@ -11,6 +11,7 @@ const { disabledAdapter, developmentAdapter, getKycAdapter } = require("../src/m
 const { requireAuth, requireRole } = require("../src/middleware/auth");
 const { paiseToPrice, priceToPaise } = require("../src/modules/services/pricing");
 const { escapeRegex, validatePincodes, validateStringArray } = require("../src/utils/validation");
+const { dateKeyInIndia, indiaDate, serviceDefinitions, shiftDateKey } = require("../scripts/seed-demo");
 
 function responseRecorder() {
   return {
@@ -65,6 +66,16 @@ test("service prices convert INR decimals to paise without accepting fractional 
   assert.equal(priceToPaise("1.005"), null);
   assert.equal(priceToPaise(0), null);
   assert.equal(paiseToPrice(1250), 12.5);
+});
+
+test("demo seed includes several service categories and derives dates from Asia/Kolkata calendar days", () => {
+  assert.equal(serviceDefinitions.length, 3);
+  assert.deepEqual(serviceDefinitions.map(({ category }) => category), ["Cleaning", "Plumbing", "Electrical"]);
+  assert.equal(dateKeyInIndia(new Date("2026-12-31T20:00:00.000Z")), "2027-01-01");
+  assert.equal(shiftDateKey("2026-12-31", 1), "2027-01-01");
+  const relativeDate = indiaDate(2, "10:00", "2026-12-31");
+  assert.equal(relativeDate.date, "2027-01-02");
+  assert.equal(relativeDate.at.toISOString(), "2027-01-02T04:30:00.000Z");
 });
 
 test("development KYC adapter stays pending and never returns document data", async () => {

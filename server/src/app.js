@@ -65,6 +65,8 @@ const apiLimiter = rateLimit({
 app.use(API_PREFIX, apiLimiter);
 app.use(`${API_PREFIX}/auth/login`, authLimiter);
 app.use(`${API_PREFIX}/auth/register`, authLimiter);
+app.use(`${API_PREFIX}/auth/password-reset/request`, authLimiter);
+app.use(`${API_PREFIX}/auth/password-reset/confirm`, authLimiter);
 
 app.get("/", (_req, res) => {
   res.json({ name: "Nearby API", version: "1.0.0", status: "running" });

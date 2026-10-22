@@ -84,8 +84,9 @@ function attachMessageSocket(io) {
       const claims = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
       const userId = claims.sub || claims.id || claims.userId;
       ensure(isObjectId(userId), 401, "Socket token is invalid", "UNAUTHORIZED");
-      const user = await User.findById(userId).select("role email isActive");
-      ensure(user && user.isActive !== false && user.role === claims.role, 401, "Socket account is inactive", "UNAUTHORIZED");
+      const user = await User.findById(userId).select("role email isActive tokenVersion");
+      const tokenVersion = Number.isSafeInteger(user?.tokenVersion) ? user.tokenVersion : 0;
+      ensure(user && user.isActive !== false && user.role === claims.role && (claims.ver ?? 0) === tokenVersion, 401, "Socket account is inactive or its session has expired", "UNAUTHORIZED");
       socket.user = { id: String(user._id), role: user.role, email: user.email };
       return next();
     } catch (error) {
@@ -96,6 +97,7 @@ function attachMessageSocket(io) {
   });
 
   io.on("connection", (socket) => {
+    socket.join(`user:${socket.user.id}`);
     socket.on("booking:join", async (payload, acknowledge = () => {}) => {
       try {
         const bookingId = payload?.bookingId;
@@ -124,5 +126,11 @@ function attachMessageSocket(io) {
   });
 }
 
+function disconnectUserSockets(userId) {
+  if (!messageIo || !userId) return;
+  messageIo.in(`user:${String(userId)}`).disconnectSockets(true);
+}
+
 module.exports = router;
 module.exports.attachMessageSocket = attachMessageSocket;
+module.exports.disconnectUserSockets = disconnectUserSockets;

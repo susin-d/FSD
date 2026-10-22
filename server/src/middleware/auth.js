@@ -31,9 +31,13 @@ async function requireAuth(req, res, next) {
   }
 
   try {
-    const user = await User.findById(claims.sub).select("name email role isActive").lean();
+    const user = await User.findById(claims.sub).select("name email phone countryCode role isActive tokenVersion").lean();
+    const tokenVersion = Number.isSafeInteger(user?.tokenVersion) ? user.tokenVersion : 0;
     if (!user || !user.isActive || user.role !== claims.role) {
       return sendError(res, 401, "ACCOUNT_UNAVAILABLE", "This account is unavailable.");
+    }
+    if ((claims.ver ?? 0) !== tokenVersion) {
+      return sendError(res, 401, "INVALID_TOKEN", "The access token is invalid or expired.");
     }
 
     req.user = { id: String(user._id), role: user.role, email: user.email };

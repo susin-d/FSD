@@ -10,7 +10,7 @@ function createAccessToken(user) {
   }
 
   return jwt.sign(
-    { role: user.role, email: user.email },
+    { role: user.role, email: user.email, ver: Number.isSafeInteger(user.tokenVersion) ? user.tokenVersion : 0 },
     secret,
     { algorithm: "HS256", subject: String(user._id), expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
   );

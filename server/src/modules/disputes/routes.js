@@ -33,10 +33,32 @@ router.post(
     const existing = await Dispute.findOne({ booking: booking._id });
     ensure(!existing, 409, "A dispute already exists for this booking", "DISPUTE_ALREADY_EXISTS");
 
-    const previousBookingStatus = booking.status;
-    const dispute = await Dispute.create({ booking: booking._id, openedBy: req.user.id, reason: reason.trim(), previousBookingStatus, status: "open" });
-    booking.status = "disputed";
-    await booking.save();
+    // Claim the booking state first so a stale completion write cannot replace "disputed".
+    // Returning the pre-update document captures the actual state if completion advanced it
+    // after the initial read above.
+    const transitionedFrom = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: { $in: DISPUTABLE_STATES } },
+      { $set: { status: "disputed" } },
+      { new: false },
+    );
+    ensure(transitionedFrom, 409, "This booking cannot be disputed in its current state", "BOOKING_STATE_CONFLICT");
+
+    let dispute;
+    try {
+      dispute = await Dispute.create({
+        booking: booking._id,
+        openedBy: req.user.id,
+        reason: reason.trim(),
+        previousBookingStatus: transitionedFrom.status,
+        status: "open",
+      });
+    } catch (error) {
+      await Booking.updateOne(
+        { _id: booking._id, status: "disputed" },
+        { $set: { status: transitionedFrom.status } },
+      ).catch((rollbackError) => console.error("Could not restore booking after dispute creation failed:", rollbackError.message));
+      throw error;
+    }
     await recordAudit({ actorId: req.user.id, action: "dispute.opened", resourceType: "dispute", resourceId: dispute._id, metadata: { bookingId: String(booking._id) }, req });
     await notifyParticipants(booking, req.user.id, "Nearby booking dispute opened", "A dispute has been opened and provider payout is paused while it is reviewed.");
     res.status(201).json({ success: true, data: { dispute: await Dispute.findById(dispute._id).populate("openedBy", "name role").lean() } });

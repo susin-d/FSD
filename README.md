@@ -42,12 +42,12 @@ server/
                            disputes, admin, and marketplace settings
     utils/                 Validation and booking/payment lifecycle helpers
   scripts/create-admin.js  One-time admin provisioning
+  scripts/seed-demo.js   Guarded local demo data setup
   tests/                   Focused Node test suite
 website/
   src/                     Responsive React app, pages, components, API client
   .env.example             Browser-safe API URL example
   vercel.json              SPA route fallback
-render.yaml                Render API service manifest
 ```
 
 ## Local setup
@@ -94,13 +94,26 @@ npm run admin:create
 
 The command does not print the password. Remove the bootstrap password from the environment after provisioning. It exits if the email belongs to a non-admin account; use this only for a deliberate, trusted bootstrap operation.
 
+## Demo data (local development only)
+
+`server/scripts/seed-demo.js` can create demo customer, provider, and admin accounts, a verified demo provider with cleaning, plumbing, and electrical listings, two weeks of availability, and sample bookings including a dispute. Its sample dates are generated relative to the current Asia/Kolkata date. It refuses to run in production or against a database that already contains documents. Use a fresh, disposable development database only.
+
+Set `ALLOW_DEMO_SEED=true` and `DEMO_PASSWORD` in `server/.env` (the password must be 12–72 UTF-8 bytes), then run:
+
+```powershell
+cd server
+node scripts/seed-demo.js
+```
+
+The script prints the demo email addresses and generated record IDs. All seeded accounts share the supplied demo password. Remove both seed-only variables when finished. Never enable this on a production database.
+
 ## API and realtime contracts
 
 Base URL: `http://localhost:4000/api/v1`. Successful JSON responses use `{ "success": true, "data": ... }`; errors use `{ "success": false, "error": { "code": ..., "message": ... } }`. Authenticated requests send `Authorization: Bearer <JWT>`.
 
 | Route group | Main operations | Access / behavior |
 | --- | --- | --- |
-| `/auth` | `POST /register`, `POST /login`, `GET /me` | Customer/provider self-registration; admin role is blocked |
+| `/auth` | `POST /register`, `POST /login`, `POST /password-reset/request`, `POST /password-reset/confirm`, `GET /me` | Customer/provider registration; six-digit email reset codes expire in 10 minutes and are limited to five attempts; reset request responses do not disclose whether an account exists |
 | `/users` | `GET /me` | Authenticated account profile |
 | `/providers` | `POST /me`, `GET /me`, `POST /me/verification`, `GET /:id` | Provider profile and replaceable KYC adapter; public profiles expose no KYC documents |
 | `/services` | `GET /`, `GET /:id`, `GET /mine`, `POST /`, `PATCH/DELETE /:id` | Search/filter by category and exact `pincode`; only active listings from verified providers are discoverable |
@@ -139,13 +152,14 @@ See `server/.env.example` and `website/.env.example` for complete examples.
 | `MONGODB_DNS_SERVERS` | Optional local DNS resolver IPs for blocked MongoDB SRV lookups; unset in production by default |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Server-side checkout, Route, and webhook configuration |
 | `KYC_PROVIDER` | Local example uses the pending-only `development_stub`; production adapter must be implemented/configured for the selected vendor |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Booking and dispute email notifications |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Booking, dispute, and password recovery email notifications |
 | `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` | Temporary one-time admin provisioning inputs |
+| `ALLOW_DEMO_SEED`, `DEMO_PASSWORD` | Local-only demo seeding guard and shared demo password; keep disabled and unset outside disposable development databases |
 | `VITE_API_URL` | Public API base URL used by the browser app |
 
 ## Deployment notes
 
-- `render.yaml` describes the production API service and uses `/health` for readiness. Render generates `JWT_SECRET`; provide `MONGO_URI`, `CLIENT_ORIGINS`, Razorpay secrets, and SMTP credentials through Render's environment. Do not set the local DNS override in production unless the deployment network requires it.
+- The API can be deployed to Render as a Node service with `server` as its root, `npm install` as the build command, `npm start` as the start command, and `/health` as the health check. This repository currently has no Render manifest; configure the service and secrets in Render directly. Provide `MONGO_URI`, a strong `JWT_SECRET`, `CLIENT_ORIGINS`, Razorpay secrets, and SMTP credentials through the service environment. Do not set the local DNS override in production unless the deployment network requires it.
 - Set the Vercel project root directory to `website`; `website/vercel.json` provides SPA route fallback. Set the production `VITE_API_URL` to the deployed API's `/api/v1` URL and allow the deployed website origin in Render's `CLIENT_ORIGINS`.
 - Configure Atlas network access, backups/restore drills, monitoring and alerts, HTTPS, email delivery, and log retention before launch. No hosting or database account is configured by this repository.
 - Keep MongoDB credentials, JWT secrets, Razorpay secrets, SMTP passwords, and KYC documents out of browser bundles and version control.
@@ -166,7 +180,7 @@ Live sandbox and production checks require external credentials and infrastructu
 
 ## Design
 
-Nearby uses a warm visual identity: yellow branding, blue actions, cream surfaces, and charcoal text. The colors are defined in `website/src/index.css`; pages use responsive layouts for the customer, provider, and admin experiences.
+Nearby uses a white page canvas with brand-yellow navigation and highlighted cards, blue buttons, and dark readable text. The colors are defined in `website/src/index.css`, with component surfaces in `website/src/App.css`. The responsive English-language web app includes customer, provider, and admin experiences.
 
 ## License
 

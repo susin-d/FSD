@@ -3,6 +3,7 @@ import { LoadingState } from './components/AppChrome.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import { Home, ServicesPage } from './pages/Home.jsx'
 import Login from './pages/auth/Login.jsx'
+import PasswordRecovery from './pages/auth/PasswordRecovery.jsx'
 import Signup from './pages/auth/Signup.jsx'
 import ServiceDetail from './pages/ServiceDetail.jsx'
 import { SessionProvider } from './services/Session.jsx'
@@ -32,6 +33,7 @@ function AppRoutes() {
     <Route path="/services" element={<ServicesPage />} />
     <Route path="/services/:serviceId" element={<ServiceDetail />} />
     <Route path="/login" element={<Login />} />
+    <Route path="/forgot-password" element={<PasswordRecovery />} />
     <Route path="/signup" element={<Signup />} />
     <Route path="/dashboard" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
     <Route path="/provider" element={<ProtectedPage role="provider"><Dashboard /></ProtectedPage>} />
